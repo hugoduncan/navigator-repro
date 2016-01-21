@@ -13,66 +13,12 @@
       (js/require "react-native/Libraries/react-native/react-native.js"))
 
 (defonce app-state (atom {:objs {"a" {:key "a" :title "A"}
-                                 "b" {:key "b" :title "B"}}
-                          :obj/focused nil}))
-
-
-(def ^{:dynamic true :private true} *nav-render*
-  "Flag to suppress navigator re-renders from outside om when pushing/popping."
-  true)
-
-(defn nav-push [nav route]
-  (binding [*nav-render* false]
-    (.push nav route)))
-
-(defn nav-pop [nav]
-  (binding [*nav-render* false]
-    (.pop nav)))
-
-(defui ObjComponent
-  static om/Ident
-  (ident [this {:keys [key]}]
-    [:objs (or key ::not-found)])
-
-  static om/IQuery
-  (query [this]
-    [:key :title])
-
-  Object
-  (render [this]
-    (with-error-view "ObjComponent"
-      (let [{:keys [key title] :as obj} (om/props this)
-            nav (om/get-computed this :nav)]
-        (view
-         {:style {:flexDirection "column" :margin 40 :alignItems "center"}}
-         (text {} (or title "no title"))
-         (touchable-highlight
-          {:style {:backgroundColor "#999" :padding 10 :borderRadius 5}
-           :onPress (fn [] (nav-pop nav))}
-          (text {:style {:color "white" :textAlign "center" :fontWeight "bold"}}
-                "Back")))))))
-
-(def obj-comp (om/factory ObjComponent {:key-fn :key}))
-
-
-(defui FocusedObjComponent
-  static om/IQuery
-  (query [this]
-    [{:obj/focused (om/get-query ObjComponent)}])
-
-  Object
-  (render [this]
-    (with-error-view "FocusedObjComponent"
-      (let [{:keys [obj/focused] :as obj} (om/props this)
-            nav (om/get-computed this :nav)]
-        (obj-comp (om/computed (or focused {}) {:nav nav}))))))
-
-(def focused-obj-comp (om/factory FocusedObjComponent))
+                                 "b" {:key "b" :title "B"}}}))
 
 (defui ObjsRowComponent
   static om/Ident
   (ident [this {:keys [key]}]
-    [:objs (or key ::not-found)])
+    [:objs key])
 
   static om/IQuery
   (query [this]
@@ -80,40 +26,26 @@
 
   Object
   (render [this]
-    (with-error-view "ObjsRowComponent"
+    (with-error-view
       (let [{:keys [title key] :as obj} (dissoc (om/props this)
                                                 :om.next/computed)
             {:keys [nav] :as props} (om/get-computed this)]
-        (when (not= :not-found key)
-          (view {:style {:flex-direction "row"
-                         :border-top-width 1
-                         :border-color "#000"
-                         :background-color "#F00"}}
-                [(touchable-highlight
-                  {:style {}
-                   :onPress (fn []
-                              (nav-push
-                               nav
-                               #js{:component focused-obj-comp
-                                   :name "Obj"
-                                   :props-fn (fn [props]
-                                               (select-keys props
-                                                            [:obj/focused]))})
-                              (om/transact! this `[(obj/focus ~obj)]))}
-                  (text {} (or title "no title")))
-                 (touchable-highlight
-                  {:style {:border-width 1
-                           :border-radius 3
-                           :border-color "#000"
-                           :background-color "#F00"}
-                   :onPress #(om/transact! this `[(obj/delete ~obj)])}
-                  (text {:style {:background-color "#F00"}} "Delete"))]))))))
+        (view {:style {:flex-direction "row"
+                       :border-top-width 1
+                       :border-color "#000"
+                       :background-color "#F00"}}
+              (text {} (or title "no title"))
+              (touchable-highlight
+               {:style {:border-width 1
+                        :border-radius 3
+                        :border-color "#000"
+                        :background-color "#F00"}
+                :onPress #(om/transact! this `[(obj/delete ~obj) :objs])}
+               (text {:style {:background-color "#F00"}} "Delete")))))))
 
-(def objs-row (om/factory ObjsRowComponent {:key-fn :key}))
+(def objs-row (om/factory ObjsRowComponent {:keyfn :key}))
 
-(def objs-ds
-  (React.ListView.DataSource.
-   #js{:rowHasChanged (fn rds-has-changed [a b] true)}))
+(def objs-ds (data-source #js{:rowHasChanged (fn [a b] (!= a b))}))
 
 (defui ObjsViewComponent
   static om/IQuery
@@ -129,20 +61,13 @@
          {:style {:flexDirection "column" :margin 40 :alignItems "center"}}
          (touchable-highlight
           {:style {:backgroundColor "#999" :padding 10 :borderRadius 5}
-           :onPress (fn []
-                      (om/transact! this `[(obj/new {})])
-                      (nav-push
-                       nav
-                       #js{:component focused-obj-comp
-                           :name "Obj"
-                           :props-fn (fn [props]
-                                       (select-keys props [:obj/focused]))}))}
+           :onPress (fn [] (om/transact! this `[(obj/new {}) :objs]))}
           (text
            {:style {:color "white" :textAlign "center" :fontWeight "bold"}}
            "New obj"))
 
          (list-view
-          {:dataSource (clone-with-rows objs-ds (clj->js (vals objs)))
+          {:dataSource (clone-with-rows objs-ds (clj->js (or (vals objs) [])))
            :renderRow (fn objs-render-r-row [row section-id row-id]
                         (with-om-vars this
                           (objs-row (om/computed
@@ -151,23 +76,6 @@
            :style {:border-width 1 :border-color "#000"}}))))))
 
 (def objs-view (om/factory ObjsViewComponent))
-
-(defui MainViewComponent
-  Object
-  (render [this]
-    (with-error-view
-      (navigator
-       {:initialRoute {:component objs-view}
-        :renderScene (fn [route nav]
-                       (when *nav-render*
-                         (let [{:keys [component props-fn] :as route}
-                               (js->clj route :keywordize-keys true)
-                               props (om/props this)]
-                           (when component
-                             (component (om/computed
-                                         ((or props-fn identity) props)
-                                         {:nav nav}))))))
-        :style {:flex 1}}))))
 
 (defmulti read om/dispatch)
 (defmethod read :default
@@ -184,23 +92,13 @@
    (fn []
      (let [k (str (int (rand 100)))
            r {:key k :title (str "Hello " k)}]
-       (swap! state (fn [state]
-                      (-> state
-                          (assoc-in [:objs k] r)
-                          (assoc :obj/focused r))))))})
+       (swap! state assoc-in [:objs k] r)))})
 
 (defmethod mutate 'obj/delete
   [{:keys [state]} _ {:keys [key]}]
   {:action
    (fn []
      (swap! state update-in [:objs] dissoc key))})
-
-
-(defmethod mutate 'obj/focus
-  [{:keys [state]} _ {:keys [key] :as obj}]
-  {:action
-   (fn []
-     (swap! state assoc :obj/focused obj))})
 
 (def reconciler
   (om/reconciler
@@ -218,4 +116,4 @@
                       (println "error on unmount" e)
                       (.log js/console e)))}))
 
-(om/add-root! reconciler MainViewComponent 1)
+(om/add-root! reconciler ObjsViewComponent 1)
