@@ -2,7 +2,8 @@
   :dependencies [[org.clojure/clojure "1.7.0"]
                  [org.clojure/clojurescript "1.7.170"]
                  [org.omcljs/om "1.0.0-alpha30"]]
-  :plugins [[lein-cljsbuild "1.1.1"]]
+  :plugins [[lein-cljsbuild "1.1.1"]
+            [lein-figwheel "0.5.0-6"]]
   :cljsbuild {:builds [{:id "dev"
                         :source-paths ["src"]
                         :figwheel true

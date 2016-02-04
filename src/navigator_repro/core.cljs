@@ -3,17 +3,18 @@
   (:require
    [goog.dom :as gdom]
    [om.next :as om :refer-macros [defui]]
-   [om.dom :as dom]))
+   [om.dom :as dom]
+   cljs.pprint))
 
 (enable-console-print!)
 
-(defonce app-state (atom {:objs {"a" {:key "a" :title "A"}
-                                 "b" {:key "b" :title "B"}}}))
+(defonce app-state {:objs [{:key "a" :title "A"}
+                           {:key "b" :title "B"}]})
 
 (defui ObjsRowComponent
   static om/Ident
   (ident [this {:keys [key]}]
-    [:objs key])
+    [:objs/by-key key])
 
   static om/IQuery
   (query [this]
@@ -22,12 +23,13 @@
   Object
   (render [this]
     (let [{:keys [title key] :as obj} (om/props this)]
-      (dom/p {}
-             (or title "no title")
+      (dom/p {} (or title "no title")
              (dom/button
               #js {:onClick
                    (fn [_]
-                     (om/transact! this `[(obj/update ~(update-in obj [:title] str ".")) :objs]))}
+                     (om/transact!
+                      this
+                      `[(obj/update ~(update-in obj [:title] str "."))]))}
               (dom/span {} "Update"))))))
 
 (def objs-row (om/factory ObjsRowComponent {:keyfn :key}))
@@ -35,15 +37,15 @@
 (defui ObjsViewComponent
   static om/IQuery
   (query [this]
-    '[:objs])
+    [{:objs (om/get-query ObjsRowComponent)}])
 
   Object
   (render [this]
-    (let [{:keys [objs] :as props} (om/props this)
+    (let [{:keys [objs objs/by-key] :as props} (om/props this)
           {:keys [nav] :as props} (om/get-computed this)]
       (dom/div {}
                (dom/ul {}
-                       (for [obj (vals objs)]
+                       (for [obj objs]
                          (dom/li {} (objs-row obj))))))))
 
 (def objs-view (om/factory ObjsViewComponent))
@@ -57,13 +59,19 @@
       {:value v}
       {:value :not-found})))
 
+(defmethod read :objs
+  [{:keys [state]} k _]
+  (.log js/console "read" (pr-str k) (pr-str _))
+  (let [st @state]
+    {:value (mapv #(get-in st %1) (:objs st))}))
+
 (defmulti mutate om/dispatch)
 
 (defmethod mutate 'obj/update
   [{:keys [state]} _ {:keys [key] :as obj}]
   {:action
    (fn []
-     (swap! state update-in [:objs key] merge obj))})
+     (swap! state update-in [:objs/by-key key] merge obj))})
 
 (def reconciler
   (om/reconciler
