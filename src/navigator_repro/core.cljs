@@ -1,16 +1,13 @@
 (ns navigator-repro.core
   "A basic UI for adding, removing and editing items in a list."
   (:require-macros
-   [natal-shell.alert-ios :refer [alert]]
-   [natal-shell.core :refer [with-error-view]]
-   [natal-shell.components
-    :refer [image list-view navigator text touchable-highlight view]]
-   [natal-shell.data-source :refer [data-source clone-with-rows]]
    [navigator-repro.macros :refer [with-om-vars]])
-  (:require [om.next :as om :refer-macros [defui]]))
+  (:require
+   [goog.dom :as gdom]
+   [om.next :as om :refer-macros [defui]]
+   [om.dom :as dom]))
 
-(set! js/React
-      (js/require "react-native/Libraries/react-native/react-native.js"))
+(enable-console-print!)
 
 (defonce app-state (atom {:objs {"a" {:key "a" :title "A"}
                                  "b" {:key "b" :title "B"}}}))
@@ -26,26 +23,24 @@
 
   Object
   (render [this]
-    (with-error-view
-      (let [{:keys [title key] :as obj} (dissoc (om/props this)
-                                                :om.next/computed)
-            {:keys [nav] :as props} (om/get-computed this)]
-        (view {:style {:flex-direction "row"
-                       :border-top-width 1
-                       :border-color "#000"
-                       :background-color "#F00"}}
-              (text {} (or title "no title"))
-              (touchable-highlight
-               {:style {:border-width 1
-                        :border-radius 3
-                        :border-color "#000"
-                        :background-color "#F00"}
-                :onPress #(om/transact! this `[(obj/delete ~obj) :objs])}
-               (text {:style {:background-color "#F00"}} "Delete")))))))
+    (let [{:keys [title key] :as obj} (dissoc (om/props this)
+                                              :om.next/computed)
+          {:keys [nav] :as props} (om/get-computed this)]
+      (dom/div {}
+               (dom/p {}
+                      (or title "no title")
+                      (dom/button
+                       #js {:onClick
+                            (fn [_]
+                              (om/transact! this `[(obj/delete ~obj) :objs]))}
+                       (dom/span {} "Delete"))
+                      (dom/button
+                       #js {:onClick
+                            (fn [_]
+                              (om/transact! this `[(obj/update ~(update-in obj [:title] str ".")) :objs]))}
+                       (dom/span {} "Update")))))))
 
 (def objs-row (om/factory ObjsRowComponent {:keyfn :key}))
-
-(def objs-ds (data-source #js{:rowHasChanged (fn [a b] (!= a b))}))
 
 (defui ObjsViewComponent
   static om/IQuery
@@ -54,30 +49,22 @@
 
   Object
   (render [this]
-    (with-error-view
-      (let [{:keys [objs] :as props} (om/props this)
-            {:keys [nav] :as props} (om/get-computed this)]
-        (view
-         {:style {:flexDirection "column" :margin 40 :alignItems "center"}}
-         (touchable-highlight
-          {:style {:backgroundColor "#999" :padding 10 :borderRadius 5}
-           :onPress (fn [] (om/transact! this `[(obj/new {}) :objs]))}
-          (text
-           {:style {:color "white" :textAlign "center" :fontWeight "bold"}}
-           "New obj"))
+    (let [{:keys [objs] :as props} (om/props this)
+          {:keys [nav] :as props} (om/get-computed this)]
+      (dom/div
+       {}
+       (dom/button
+        #js {:onClick (fn [] (om/transact! this `[(obj/new {}) :objs]))}
+        (dom/span {} "New obj"))
 
-         (list-view
-          {:dataSource (clone-with-rows objs-ds (clj->js (or (vals objs) [])))
-           :renderRow (fn objs-render-r-row [row section-id row-id]
-                        (with-om-vars this
-                          (objs-row (om/computed
-                                     (js->clj row :keywordize-keys true)
-                                     {:nav nav}))))
-           :style {:border-width 1 :border-color "#000"}}))))))
+       (dom/ul {}
+               (for [obj (vals objs)]
+                 (dom/li {} (objs-row obj))))))))
 
 (def objs-view (om/factory ObjsViewComponent))
 
 (defmulti read om/dispatch)
+
 (defmethod read :default
   [{:keys [state]} k _]
   (let [st @state]
@@ -86,6 +73,7 @@
       {:value :not-found})))
 
 (defmulti mutate om/dispatch)
+
 (defmethod mutate 'obj/new
   [{:keys [state]} _ _]
   {:action
@@ -100,20 +88,17 @@
    (fn []
      (swap! state update-in [:objs] dissoc key))})
 
+(defmethod mutate 'obj/update
+  [{:keys [state]} _ {:keys [key] :as obj}]
+  {:action
+   (fn []
+     (swap! state update-in [:objs key] merge obj))})
+
 (def reconciler
   (om/reconciler
    {:state app-state
-    :parser (om/parser {:read read :mutate mutate})
-    :root-render #(try
-                    (.render js/React %1 %2)
-                    (catch js/Error e
-                      (println "error on render" e)
-                      (.log js/console e))
-                    )
-    :root-unmount #(try
-                     (.unmountComponentAtNode js/React %)
-                     (catch js/Error e
-                      (println "error on unmount" e)
-                      (.log js/console e)))}))
+    :parser (om/parser {:read read :mutate mutate})}))
 
-(om/add-root! reconciler ObjsViewComponent 1)
+(om/add-root! reconciler ObjsViewComponent (gdom/getElement "main-app-area"))
+
+(enable-console-print!)

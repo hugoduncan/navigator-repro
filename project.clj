@@ -1,16 +1,25 @@
-(defproject navigator-repro "0.1.0-SNAPSHOT"
-  :description "FIXME: write description"
-  :url "http://example.com/FIXME"
-  :license {:name "Eclipse Public License"
-            :url "http://www.eclipse.org/legal/epl-v10.html"}
+(defproject list-repro "0.1.0-SNAPSHOT"
   :dependencies [[org.clojure/clojure "1.7.0"]
                  [org.clojure/clojurescript "1.7.170"]
-                 [org.omcljs/om "1.0.0-alpha22"]
-                 [org.omcljs/ambly "0.6.0"]
-                 [natal-shell "0.1.6"]]
- :plugins [[lein-cljsbuild "1.1.1"]]
- :cljsbuild {:builds {:dev {:source-paths ["src"]
-                            :compiler {:output-to "target/out/main.js"
-                                       :output-dir "target/out"
-                                       :optimizations :none
-                                       :source-map true}}}})
+                 [org.omcljs/om "1.0.0-alpha30"]]
+  :plugins [[lein-cljsbuild "1.1.1"]]
+  :cljsbuild {:builds [{:id "dev"
+                        :source-paths ["src"]
+                        :figwheel true
+                        :compiler {:main "navigator-repro.core"
+                                   :output-to "resources/public/js/compiled/app_web.js"
+                                   :output-dir "resources/public/js/compiled/out"
+                                   :asset-path "js/compiled/out"
+                                   :optimizations :none
+                                   :source-map-timestamp true}}]}
+  :profiles
+  {:dev
+   {:dependencies [[figwheel-sidecar "0.5.0-6"]
+                   [com.cemerick/piggieback "0.2.1"]
+                   [weasel "0.7.0"]
+                   [acyclic/squiggly-clojure "0.1.4"]]
+    :repl-options {:nrepl-middleware [cemerick.piggieback/wrap-cljs-repl]}}}
+
+  :clean-targets ^{:protect false} ["resources/public/js/compiled"
+                                    "target"]
+  )
