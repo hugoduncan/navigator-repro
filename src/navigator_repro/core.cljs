@@ -23,22 +23,14 @@
 
   Object
   (render [this]
-    (let [{:keys [title key] :as obj} (dissoc (om/props this)
-                                              :om.next/computed)
-          {:keys [nav] :as props} (om/get-computed this)]
-      (dom/div {}
-               (dom/p {}
-                      (or title "no title")
-                      (dom/button
-                       #js {:onClick
-                            (fn [_]
-                              (om/transact! this `[(obj/delete ~obj) :objs]))}
-                       (dom/span {} "Delete"))
-                      (dom/button
-                       #js {:onClick
-                            (fn [_]
-                              (om/transact! this `[(obj/update ~(update-in obj [:title] str ".")) :objs]))}
-                       (dom/span {} "Update")))))))
+    (let [{:keys [title key] :as obj} (om/props this)]
+      (dom/p {}
+             (or title "no title")
+             (dom/button
+              #js {:onClick
+                   (fn [_]
+                     (om/transact! this `[(obj/update ~(update-in obj [:title] str ".")) :objs]))}
+              (dom/span {} "Update"))))))
 
 (def objs-row (om/factory ObjsRowComponent {:keyfn :key}))
 
@@ -51,15 +43,10 @@
   (render [this]
     (let [{:keys [objs] :as props} (om/props this)
           {:keys [nav] :as props} (om/get-computed this)]
-      (dom/div
-       {}
-       (dom/button
-        #js {:onClick (fn [] (om/transact! this `[(obj/new {}) :objs]))}
-        (dom/span {} "New obj"))
-
-       (dom/ul {}
-               (for [obj (vals objs)]
-                 (dom/li {} (objs-row obj))))))))
+      (dom/div {}
+               (dom/ul {}
+                       (for [obj (vals objs)]
+                         (dom/li {} (objs-row obj))))))))
 
 (def objs-view (om/factory ObjsViewComponent))
 
@@ -73,20 +60,6 @@
       {:value :not-found})))
 
 (defmulti mutate om/dispatch)
-
-(defmethod mutate 'obj/new
-  [{:keys [state]} _ _]
-  {:action
-   (fn []
-     (let [k (str (int (rand 100)))
-           r {:key k :title (str "Hello " k)}]
-       (swap! state assoc-in [:objs k] r)))})
-
-(defmethod mutate 'obj/delete
-  [{:keys [state]} _ {:keys [key]}]
-  {:action
-   (fn []
-     (swap! state update-in [:objs] dissoc key))})
 
 (defmethod mutate 'obj/update
   [{:keys [state]} _ {:keys [key] :as obj}]
